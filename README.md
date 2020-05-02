@@ -27,8 +27,8 @@ We supply 2 gRPC API
   - `/renew()`
   - `/check()`
 There are 2 event notifications
-  - `$drm/online/:device`
-  - `$drm/offline/:device`
+  - `$drm/online/:device` & `$drm/online`
+  - `$drm/offline/:device` & `$drm/offline`
 
 
 #### go for gRPC
@@ -40,3 +40,12 @@ protoc --go_out=plugins=grpc:. *.proto
 
 export PATH="$PATH:$(go env GOPATH)/bin"
 export GOPATH="/home/wangfan/Workspace/golang/"
+
+
+#### mqtt client for ubuntu
+
+sudo apt-get install mosquitto mosquitto-clients
+
+mosquitto_sub -h www.ruichen.top -t "$drm/offline" -u "admin" -P "123123123"
+
+mosquitto_pub -h  www.ruichen.top -t "$drm/offline" -m "2" -u "admin" -P "123123123"

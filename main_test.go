@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestRenew(t *testing.T) {
-	isOk, err := Renew("foo", 10)
+	isOk, err := renew("foo", 10)
 	if err != nil {
 		t.Errorf("Renew('foo', 10) error: %v", err)
 	}
@@ -13,7 +13,7 @@ func TestRenew(t *testing.T) {
 }
 
 func TestCheck(t *testing.T) {
-	isOk, err := Check("foo")
+	isOk, err := check("foo")
 	if err != nil {
 		t.Errorf("Check('foo') error: %v", err)
 	}

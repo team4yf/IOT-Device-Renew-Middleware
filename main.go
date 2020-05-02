@@ -15,6 +15,8 @@ import (
 	"github.com/go-redis/redis/v7"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 const (
@@ -24,11 +26,30 @@ const (
 	REDIS_DB     = 13
 	REDIS_PASS   = "admin123"
 	REDIS_PREFIX = "drm"
+	MQTT_URL     = "www.ruichen.top:1883"
+	MQTT_USER    = "admin"
+	MQTT_PASS    = "123123123"
 )
 
 var (
-	client *redis.Client
+	client     *redis.Client
+	mqttClient mqtt.Client
 )
+
+func mqttConn() mqtt.Client {
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(fmt.Sprintf("tcp://%s", MQTT_URL))
+	opts.SetUsername(MQTT_USER)
+	opts.SetPassword(MQTT_PASS)
+	client := mqtt.NewClient(opts)
+	token := client.Connect()
+	for !token.WaitTimeout(3 * time.Second) {
+	}
+	if err := token.Error(); err != nil {
+		log.Fatal(err)
+	}
+	return client
+}
 
 func init() {
 	client = redis.NewClient(&redis.Options{
@@ -40,6 +61,7 @@ func init() {
 	pong, err := client.Ping().Result()
 	fmt.Println(pong, err)
 
+	mqttClient = mqttConn()
 }
 
 type server struct{}
@@ -70,14 +92,16 @@ func subscribe() {
 			continue
 		}
 
-		log.Printf("expired " + msg.Payload)
+		log.Printf("expired " + deviceKey)
+		// publish the event
+		mqttClient.Publish("$drm/offline", 0, false, deviceKey)
 	}
 }
 
 func (s *server) Renew(ctx context.Context, request *pb.RenewRequest) (response *pb.RenewResponse, err error) {
 	device := fmt.Sprintf("%s:%s:%s", REDIS_PREFIX, request.Project, request.Device)
 	expire := request.Expire
-	isOk, err := Renew(device, expire)
+	isOk, err := renew(device, expire)
 	if err != nil {
 		return nil, err
 	}
@@ -89,17 +113,19 @@ func (s *server) Renew(ctx context.Context, request *pb.RenewRequest) (response 
 
 func (s *server) Check(ctx context.Context, request *pb.CheckRequest) (response *pb.CheckResponse, err error) {
 	device := fmt.Sprintf("%s:%s:%s", REDIS_PREFIX, request.Project, request.Device)
-	isOk, err := Check(device)
+	isOk, err := check(device)
+	response = &pb.CheckResponse{
+		IsOk: false,
+	}
 	if err != nil {
 		return nil, err
 	}
-	response = &pb.CheckResponse{
-		IsOk: isOk,
-	}
+	response.IsOk = isOk
 	return response, nil
 }
 
-func Renew(device string, ex int64) (bool, error) {
+// renew the device
+func renew(device string, ex int64) (bool, error) {
 	err := client.Set(device, strconv.FormatInt(time.Now().Unix(), 10), time.Duration(ex)*time.Second).Err()
 	if err != nil {
 		return false, err
@@ -107,7 +133,8 @@ func Renew(device string, ex int64) (bool, error) {
 	return true, nil
 }
 
-func Check(device string) (bool, error) {
+// check the device
+func check(device string) (bool, error) {
 	cmd := client.Get(device)
 	if cmd.Err() != nil {
 		return false, cmd.Err()

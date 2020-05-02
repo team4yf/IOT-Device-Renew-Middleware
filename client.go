@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	pb "github/team4yf/IOT-Device-Renew-Middleware/drm"
 
@@ -24,6 +25,7 @@ func main() {
 	client := pb.NewDeviceRenewClient(conn)
 
 	Renew(client)
+	time.Sleep(time.Second)
 	Check(client)
 
 }
@@ -45,7 +47,11 @@ func Check(client pb.DeviceRenewClient) {
 	request.Project = "testa"
 	request.Device = "/dd/aa"
 
-	response, _ := client.Check(context.Background(), &request) //调用远程方法
+	response, err := client.Check(context.Background(), &request) //调用远程方法
+	if err != nil {
+		log.Printf("Check response error  %#v", err)
+	} else {
+		log.Printf("Check response result  %#v", response.IsOk)
+	}
 
-	log.Printf("Check response result  %#v", response.IsOk)
 }
