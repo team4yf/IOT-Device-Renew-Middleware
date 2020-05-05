@@ -9,14 +9,13 @@ import (
 	"net"
 	"strconv"
 	"strings"
-
 	"time"
 
 	"github.com/go-redis/redis/v7"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	mqtt "github.com/eclipse/paho.mqtt.golang"
+	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
 
 const (
@@ -33,20 +32,18 @@ const (
 
 var (
 	client     *redis.Client
-	mqttClient mqtt.Client
+	mqttClient MQTT.Client
 )
 
-func mqttConn() mqtt.Client {
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("tcp://%s", MQTT_URL))
+func mqttConn() MQTT.Client {
+	opts := MQTT.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s", MQTT_URL))
+	// opts.SetClientID("go-simple")
 	opts.SetUsername(MQTT_USER)
 	opts.SetPassword(MQTT_PASS)
-	client := mqtt.NewClient(opts)
-	token := client.Connect()
-	for !token.WaitTimeout(3 * time.Second) {
-	}
-	if err := token.Error(); err != nil {
-		log.Fatal(err)
+	client := MQTT.NewClient(opts)
+
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		log.Fatal(token.Error().Error)
 	}
 	return client
 }
@@ -92,16 +89,30 @@ func subscribe() {
 			continue
 		}
 
-		log.Printf("expired " + deviceKey)
-		// publish the event
-		mqttClient.Publish("$drm/offline", 0, false, deviceKey)
+		isOk, err := publishOfflineEvent(deviceKey)
+		if !isOk {
+			log.Printf("publishOfflineEvent failed, error: ", err)
+		}
+
 	}
 }
 
 func (s *server) Renew(ctx context.Context, request *pb.RenewRequest) (response *pb.RenewResponse, err error) {
 	device := fmt.Sprintf("%s:%s:%s", REDIS_PREFIX, request.Project, request.Device)
+
+	// if the device not exist, publish a online event
+	isOk, err := check(device)
+	if err != nil {
+		return nil, err
+	}
+	if !isOk {
+		go func() {
+			pushed, _ := publishOnlineEvent(device)
+			log.Printf("pushed: ", pushed)
+		}()
+	}
 	expire := request.Expire
-	isOk, err := renew(device, expire)
+	isOk, err = renew(device, expire)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +135,32 @@ func (s *server) Check(ctx context.Context, request *pb.CheckRequest) (response 
 	return response, nil
 }
 
+func publishOnlineEvent(deviceKey string) (bool, error) {
+	proj, deviceId := splitDeviceKey(deviceKey)
+	// publish the event
+	token := mqttClient.Publish("^drm/online/"+proj, 0, false, deviceId)
+	token.Wait()
+	return true, nil
+}
+
+func publishOfflineEvent(deviceKey string) (bool, error) {
+	proj, deviceId := splitDeviceKey(deviceKey)
+	// publish the event
+	token := mqttClient.Publish("^drm/offline/"+proj, 0, false, deviceId)
+	token.Wait()
+	return true, nil
+}
+
+// split the redis key,
+// like: drm:foo:bar
+// it should return foo, bar
+func splitDeviceKey(deviceKey string) (string, string) {
+	subStrs := strings.Split(deviceKey, ":")
+	proj := subStrs[1]
+	deviceId := strings.Join(subStrs[1:], ":")
+	return proj, deviceId
+}
+
 // renew the device
 func renew(device string, ex int64) (bool, error) {
 	err := client.Set(device, strconv.FormatInt(time.Now().Unix(), 10), time.Duration(ex)*time.Second).Err()
@@ -139,6 +176,6 @@ func check(device string) (bool, error) {
 	if cmd.Err() != nil {
 		return false, cmd.Err()
 	}
-	log.Printf("%s=>val: %s", device, cmd.Val())
+	// log.Printf("%s=>val: %s", device, cmd.Val())
 	return true, nil
 }

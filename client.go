@@ -13,6 +13,8 @@ import (
 const (
 	networkType = "tcp"
 	address     = "localhost:5009"
+	PROJ        = "foo"
+	DEVICE      = "bar"
 )
 
 func main() {
@@ -33,9 +35,9 @@ func main() {
 // implement the interface
 func Renew(client pb.DeviceRenewClient) {
 	var request pb.RenewRequest
-	request.Project = "testa"
-	request.Device = "/dd/aa"
-	request.Expire = 1
+	request.Project = PROJ
+	request.Device = DEVICE
+	request.Expire = 3
 
 	response, _ := client.Renew(context.Background(), &request) //调用远程方法
 
@@ -44,8 +46,8 @@ func Renew(client pb.DeviceRenewClient) {
 
 func Check(client pb.DeviceRenewClient) {
 	var request pb.CheckRequest
-	request.Project = "testa"
-	request.Device = "/dd/aa"
+	request.Project = PROJ
+	request.Device = DEVICE
 
 	response, err := client.Check(context.Background(), &request) //调用远程方法
 	if err != nil {

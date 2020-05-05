@@ -27,8 +27,8 @@ We supply 2 gRPC API
   - `/renew()`
   - `/check()`
 There are 2 event notifications
-  - `$drm/online/:device` & `$drm/online`
-  - `$drm/offline/:device` & `$drm/offline`
+  - `^drm/online/:proj`
+  - `^drm/offline/:proj`
 
 
 #### go for gRPC
@@ -46,6 +46,6 @@ export GOPATH="/home/wangfan/Workspace/golang/"
 
 sudo apt-get install mosquitto mosquitto-clients
 
-mosquitto_sub -h www.ruichen.top -t "$drm/offline" -u "admin" -P "123123123"
+mosquitto_sub -h www.ruichen.top -t "^drm/offline/foo" -u "admin" -P "123123123"
 
-mosquitto_pub -h  www.ruichen.top -t "$drm/offline" -m "2" -u "admin" -P "123123123"
+mosquitto_pub -h  www.ruichen.top -t "^drm/offline/foo" -m "2" -u "admin" -P "123123123"
