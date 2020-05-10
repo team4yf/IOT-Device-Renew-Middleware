@@ -216,10 +216,10 @@ func renew(device string, ex int64) (bool, error) {
 
 // check the device
 func check(device string) (bool, error) {
-	cmd := client.Get(device)
+	cmd := client.Exists(device)
 	if cmd.Err() != nil {
 		return false, cmd.Err()
 	}
-	// log.Printf("%s=>val: %s", device, cmd.Val())
-	return true, nil
+	log.Printf("%s=>val: %s", device, cmd.Val())
+	return cmd.Val() == 1, nil
 }

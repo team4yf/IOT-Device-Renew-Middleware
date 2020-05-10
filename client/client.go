@@ -25,7 +25,6 @@ func main() {
 	}
 	defer conn.Close()
 	client := pb.NewDeviceRenewClient(conn)
-
 	Renew(client)
 	time.Sleep(time.Second)
 	Check(client)
@@ -37,11 +36,14 @@ func Renew(client pb.DeviceRenewClient) {
 	var request pb.RenewRequest
 	request.Project = PROJ
 	request.Device = DEVICE
-	request.Expire = 3
+	request.Expire = 30
 
-	response, _ := client.Renew(context.Background(), &request) //调用远程方法
-
-	log.Printf("Renew response result  %#v", response.IsOk)
+	response, err := client.Renew(context.Background(), &request) //调用远程方法
+	if err != nil {
+		log.Printf("Renew response error  %#v", err)
+	} else {
+		log.Printf("Renew response result  %#v", response.IsOk)
+	}
 }
 
 func Check(client pb.DeviceRenewClient) {

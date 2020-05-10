@@ -18,4 +18,4 @@ clean:
 	rm -rf main
 
 run:
-	docker run -p 5009:5009 -d yfsoftcom/fpm-iot-drm:${TAG}
+	docker run -p 5009:5009 -e "REDIS_HOST=192.168.159.102" -d yfsoftcom/fpm-iot-drm:${TAG}
