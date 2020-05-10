@@ -49,3 +49,17 @@ sudo apt-get install mosquitto mosquitto-clients
 mosquitto_sub -h www.ruichen.top -t "^drm/offline/foo" -u "admin" -P "123123123"
 
 mosquitto_pub -h  www.ruichen.top -t "^drm/offline/foo" -m "2" -u "admin" -P "123123123"
+
+#### docker env
+
+```
+SERVE_PORT   = "5009"
+REDIS_HOST   = "localhost"
+REDIS_PORT   = "6379"
+REDIS_DB     = 13
+REDIS_PASS   = "admin123"
+REDIS_PREFIX = "drm"
+MQTT_URL     = "localhost:1883"
+MQTT_USER    = "admin"
+MQTT_PASS    = "123123123"
+```

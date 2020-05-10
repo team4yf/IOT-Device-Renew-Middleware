@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os"
 
 	"github.com/go-redis/redis/v7"
 	"golang.org/x/net/context"
@@ -18,7 +19,7 @@ import (
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
 
-const (
+var (
 	PORT         = "5009"
 	REDIS_HOST   = "localhost"
 	REDIS_PORT   = "6379"
@@ -28,6 +29,9 @@ const (
 	MQTT_URL     = "www.ruichen.top:1883"
 	MQTT_USER    = "admin"
 	MQTT_PASS    = "123123123"
+	MQTT_EVENT_PREFIX = "^drm"
+	MQTT_EVENT_QOS = 0
+	MQTT_EVENT_RETAIN = false
 )
 
 var (
@@ -45,10 +49,49 @@ func mqttConn() MQTT.Client {
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		log.Fatal(token.Error().Error)
 	}
+	log.Println("mqtt connect to", MQTT_URL, "success!")
 	return client
 }
 
+func initGetEnv() {
+	if "" != os.Getenv("SERVE_PORT") {
+		PORT = os.Getenv("SERVE_PORT")
+	}
+	if "" != os.Getenv("REDIS_HOST") {
+		REDIS_HOST = os.Getenv("REDIS_HOST")
+	}
+	if "" != os.Getenv("REDIS_PORT") {
+		REDIS_PORT = os.Getenv("REDIS_PORT")
+	}
+	if "" != os.Getenv("REDIS_DB") {
+		REDIS_DB,_ = strconv.Atoi(os.Getenv("REDIS_DB"))
+	}
+	if "" != os.Getenv("REDIS_PREFIX") {
+		REDIS_PREFIX = os.Getenv("REDIS_PREFIX")
+	}
+	if "" != os.Getenv("MQTT_URL") {
+		MQTT_URL = os.Getenv("MQTT_URL")
+	}
+	if "" != os.Getenv("MQTT_USER") {
+		MQTT_USER = os.Getenv("MQTT_USER")
+	}
+	if "" != os.Getenv("MQTT_PASS") {
+		MQTT_PASS = os.Getenv("MQTT_PASS")
+	}
+	if "" != os.Getenv("MQTT_EVENT_PREFIX") {
+		MQTT_EVENT_PREFIX = os.Getenv("MQTT_EVENT_PREFIX")
+	}
+	if "" != os.Getenv("MQTT_EVENT_QOS") {
+		MQTT_EVENT_QOS, _ = strconv.Atoi(os.Getenv("MQTT_EVENT_QOS"))
+	}
+	if "" != os.Getenv("MQTT_EVENT_RETAIN") {
+		MQTT_EVENT_RETAIN, _ = strconv.ParseBool(os.Getenv("MQTT_EVENT_RETAIN"))
+	}
+}
+
 func init() {
+
+	initGetEnv()
 	client = redis.NewClient(&redis.Options{
 		Addr:     REDIS_HOST + ":" + REDIS_PORT,
 		Password: REDIS_PASS,
@@ -56,7 +99,7 @@ func init() {
 	})
 
 	pong, err := client.Ping().Result()
-	fmt.Println(pong, err)
+	log.Println("Redis Server Pong:", pong, err)
 
 	mqttClient = mqttConn()
 }
@@ -73,14 +116,15 @@ func main() {
 	}
 	s := grpc.NewServer()
 	pb.RegisterDeviceRenewServer(s, &server{})
+	log.Printf("grpc serve in :%s\n", PORT)
 	s.Serve(lis)
-	log.Println("grpc serve in :%s", PORT)
 
 }
 
 func subscribe() {
 	pubsub := client.Subscribe(fmt.Sprintf("__keyevent@%d__:expired", REDIS_DB))
 	defer pubsub.Close()
+	log.Printf("Redis expired key event subscribe success!\n")
 	for {
 		msg, _ := pubsub.ReceiveMessage()
 		deviceKey := msg.Payload
@@ -138,7 +182,7 @@ func (s *server) Check(ctx context.Context, request *pb.CheckRequest) (response 
 func publishOnlineEvent(deviceKey string) (bool, error) {
 	proj, deviceId := splitDeviceKey(deviceKey)
 	// publish the event
-	token := mqttClient.Publish("^drm/online/"+proj, 0, false, deviceId)
+	token := mqttClient.Publish(MQTT_EVENT_PREFIX+ "/online/"+proj, byte(MQTT_EVENT_QOS), MQTT_EVENT_RETAIN, deviceId)
 	token.Wait()
 	return true, nil
 }
@@ -146,7 +190,7 @@ func publishOnlineEvent(deviceKey string) (bool, error) {
 func publishOfflineEvent(deviceKey string) (bool, error) {
 	proj, deviceId := splitDeviceKey(deviceKey)
 	// publish the event
-	token := mqttClient.Publish("^drm/offline/"+proj, 0, false, deviceId)
+	token := mqttClient.Publish(MQTT_EVENT_PREFIX+ "/offline/"+proj, byte(MQTT_EVENT_QOS), MQTT_EVENT_RETAIN, deviceId)
 	token.Wait()
 	return true, nil
 }
