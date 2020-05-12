@@ -7,6 +7,10 @@ IOT Device Renew Middleware
 Project Code: [DRM].
 
 It’s a middleware for iot devices to renew their online status.
+Accept to save the timeout command, and always notify the timeout event `^command/timeout` with the command id.
+
+If the command has been feedback, app should call the `drm` to remove the command timeout event.
+otherwise, it will notify anyway.
 
 2 important logic: renew, timeup
 
