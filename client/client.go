@@ -12,7 +12,7 @@ import (
 
 const (
 	networkType = "tcp"
-	address     = "localhost:5009"
+	address     = "localhost:3009"
 	PROJ        = "foo"
 	DEVICE      = "bar"
 )
