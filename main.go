@@ -7,10 +7,10 @@ import (
 	pb "github/team4yf/IOT-Device-Renew-Middleware/drm"
 	"log"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"time"
-	"os"
 
 	"github.com/go-redis/redis/v7"
 	"golang.org/x/net/context"
@@ -20,17 +20,17 @@ import (
 )
 
 var (
-	PORT         = "5009"
-	REDIS_HOST   = "localhost"
-	REDIS_PORT   = "6379"
-	REDIS_DB     = 13
-	REDIS_PASS   = "admin123"
-	REDIS_PREFIX = "drm"
-	MQTT_URL     = "www.ruichen.top:1883"
-	MQTT_USER    = "admin"
-	MQTT_PASS    = "123123123"
+	PORT              = "3009"
+	REDIS_HOST        = "localhost"
+	REDIS_PORT        = "6379"
+	REDIS_DB          = 13
+	REDIS_PASS        = "admin123"
+	REDIS_PREFIX      = "drm"
+	MQTT_URL          = "www.ruichen.top:1883"
+	MQTT_USER         = "admin"
+	MQTT_PASS         = "123123123"
 	MQTT_EVENT_PREFIX = "^drm"
-	MQTT_EVENT_QOS = 0
+	MQTT_EVENT_QOS    = 0
 	MQTT_EVENT_RETAIN = false
 )
 
@@ -47,13 +47,13 @@ func mqttConn() MQTT.Client {
 	client := MQTT.NewClient(opts)
 
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal(token.Error().Error)
+		log.Fatal(token.Error().Error())
 	}
-	log.Println("mqtt connect to", MQTT_URL, "success!")
 	return client
 }
 
 func initGetEnv() {
+
 	if "" != os.Getenv("SERVE_PORT") {
 		PORT = os.Getenv("SERVE_PORT")
 	}
@@ -63,8 +63,11 @@ func initGetEnv() {
 	if "" != os.Getenv("REDIS_PORT") {
 		REDIS_PORT = os.Getenv("REDIS_PORT")
 	}
+	if "" != os.Getenv("REDIS_PASS") {
+		REDIS_PASS = os.Getenv("REDIS_PASS")
+	}
 	if "" != os.Getenv("REDIS_DB") {
-		REDIS_DB,_ = strconv.Atoi(os.Getenv("REDIS_DB"))
+		REDIS_DB, _ = strconv.Atoi(os.Getenv("REDIS_DB"))
 	}
 	if "" != os.Getenv("REDIS_PREFIX") {
 		REDIS_PREFIX = os.Getenv("REDIS_PREFIX")
@@ -91,6 +94,7 @@ func initGetEnv() {
 
 func init() {
 
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	initGetEnv()
 	client = redis.NewClient(&redis.Options{
 		Addr:     REDIS_HOST + ":" + REDIS_PORT,
@@ -98,8 +102,10 @@ func init() {
 		DB:       REDIS_DB,
 	})
 
-	pong, err := client.Ping().Result()
-	log.Println("Redis Server Pong:", pong, err)
+	_, err := client.Ping().Result()
+	if err != nil {
+		log.Fatal("redis cant connect ", err)
+	}
 
 	mqttClient = mqttConn()
 }
@@ -124,7 +130,7 @@ func main() {
 func subscribe() {
 	pubsub := client.Subscribe(fmt.Sprintf("__keyevent@%d__:expired", REDIS_DB))
 	defer pubsub.Close()
-	log.Printf("Redis expired key event subscribe success!\n")
+	// log.Printf("Redis expired key event subscribe success!\n")
 	for {
 		msg, _ := pubsub.ReceiveMessage()
 		deviceKey := msg.Payload
@@ -135,7 +141,7 @@ func subscribe() {
 
 		isOk, err := publishOfflineEvent(deviceKey)
 		if !isOk {
-			log.Printf("publishOfflineEvent failed, error: ", err)
+			log.Println("publishOfflineEvent failed, error: ", err)
 		}
 
 	}
@@ -152,7 +158,7 @@ func (s *server) Renew(ctx context.Context, request *pb.RenewRequest) (response 
 	if !isOk {
 		go func() {
 			pushed, _ := publishOnlineEvent(device)
-			log.Printf("pushed: ", pushed)
+			log.Println("pushed: ", pushed)
 		}()
 	}
 	expire := request.Expire
@@ -180,17 +186,17 @@ func (s *server) Check(ctx context.Context, request *pb.CheckRequest) (response 
 }
 
 func publishOnlineEvent(deviceKey string) (bool, error) {
-	proj, deviceId := splitDeviceKey(deviceKey)
+	proj, deviceID := splitDeviceKey(deviceKey)
 	// publish the event
-	token := mqttClient.Publish(MQTT_EVENT_PREFIX+ "/online/"+proj, byte(MQTT_EVENT_QOS), MQTT_EVENT_RETAIN, deviceId)
+	token := mqttClient.Publish(MQTT_EVENT_PREFIX+"/online/"+proj, byte(MQTT_EVENT_QOS), MQTT_EVENT_RETAIN, deviceID)
 	token.Wait()
 	return true, nil
 }
 
 func publishOfflineEvent(deviceKey string) (bool, error) {
-	proj, deviceId := splitDeviceKey(deviceKey)
+	proj, deviceID := splitDeviceKey(deviceKey)
 	// publish the event
-	token := mqttClient.Publish(MQTT_EVENT_PREFIX+ "/offline/"+proj, byte(MQTT_EVENT_QOS), MQTT_EVENT_RETAIN, deviceId)
+	token := mqttClient.Publish(MQTT_EVENT_PREFIX+"/offline/"+proj, byte(MQTT_EVENT_QOS), MQTT_EVENT_RETAIN, deviceID)
 	token.Wait()
 	return true, nil
 }
@@ -201,8 +207,8 @@ func publishOfflineEvent(deviceKey string) (bool, error) {
 func splitDeviceKey(deviceKey string) (string, string) {
 	subStrs := strings.Split(deviceKey, ":")
 	proj := subStrs[1]
-	deviceId := strings.Join(subStrs[1:], ":")
-	return proj, deviceId
+	deviceID := strings.Join(subStrs[1:], ":")
+	return proj, deviceID
 }
 
 // renew the device
@@ -220,6 +226,6 @@ func check(device string) (bool, error) {
 	if cmd.Err() != nil {
 		return false, cmd.Err()
 	}
-	log.Printf("%s=>val: %s", device, cmd.Val())
+	log.Printf(device, "=>val: ", cmd.Val())
 	return cmd.Val() == 1, nil
 }

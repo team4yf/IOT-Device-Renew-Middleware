@@ -57,8 +57,8 @@ mosquitto_pub -h  www.ruichen.top -t "^drm/offline/foo" -m "2" -u "admin" -P "12
 #### docker env
 
 ```
-SERVE_PORT   = "5009"
-REDIS_HOST   = "localhost"
+SERVE_PORT   = "3009"
+REDIS_HOST   = "redis"
 REDIS_PORT   = "6379"
 REDIS_DB     = 13
 REDIS_PASS   = "admin123"

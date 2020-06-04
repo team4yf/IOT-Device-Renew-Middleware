@@ -16,6 +16,8 @@ push:
 
 clean:
 	rm -rf main
+redis:
+	docker run -p 6379:6379 -v $(PWD)/redis.conf:/usr/local/etc/redis/redis.conf -d redis:alpine3.11 redis-server /usr/local/etc/redis/redis.conf
 
 run:
 	docker run -p 5009:5009 -e "REDIS_HOST=192.168.159.102" -d yfsoftcom/fpm-iot-drm:${TAG}
