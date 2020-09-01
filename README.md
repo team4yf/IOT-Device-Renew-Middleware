@@ -27,43 +27,19 @@ DRM -> notify -> App
 	App -> DRM -> check -> T/F
 
 
-We supply 2 gRPC API
-  - `/renew()`
-  - `/check()`
+We supply 2 event topics
+  - `$drm/{{uuid}}/renew`   // renew the device online expired duration .
+  - `$drm/{{uuid}}/message` // register a message .
+  - `$d2s/{{uuid}}/partner/feedback` // subscribe the feedback
 There are 2 event notifications
-  - `^drm/online/:proj`
-  - `^drm/offline/:proj`
-
-
-#### go for gRPC
-
-go get -u google.golang.org/grpc
-go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
-go get -u golang.org/x/net
-protoc --go_out=plugins=grpc:. *.proto
-
-export PATH="$PATH:$(go env GOPATH)/bin"
-export GOPATH="/home/wangfan/Workspace/golang/"
+  - `$drm/{{uuid}}/offline` // notify a message after the device offline .
+  - `$drm/{{uuid}}/timeout` // notify a message when the message timtout
 
 
 #### mqtt client for ubuntu
 
-sudo apt-get install mosquitto mosquitto-clients
+sudo apt-get install mosquitto-clients
 
-mosquitto_sub -h www.ruichen.top -t "^drm/offline/foo" -u "admin" -P "123123123"
+mosquitto_sub -h open.yunplus.io -t "^drm/offline/foo" -u "fpmuser" -P "123123123"
 
-mosquitto_pub -h  www.ruichen.top -t "^drm/offline/foo" -m "2" -u "admin" -P "123123123"
-
-#### docker env
-
-```
-SERVE_PORT   = "3009"
-REDIS_HOST   = "redis"
-REDIS_PORT   = "6379"
-REDIS_DB     = 13
-REDIS_PASS   = "admin123"
-REDIS_PREFIX = "drm"
-MQTT_URL     = "localhost:1883"
-MQTT_USER    = "admin"
-MQTT_PASS    = "123123123"
-```
+mosquitto_pub -h open.yunplus.io -t "^drm/offline/foo" -m "2" -u "fpmuser" -P "123123123"
