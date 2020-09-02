@@ -27,11 +27,12 @@ DRM -> notify -> App
 	App -> DRM -> check -> T/F
 
 
-We supply 2 event topics
+We supply 3 event topics
   - `$drm/{{uuid}}/renew`   // renew the device online expired duration .
   - `$drm/{{uuid}}/message` // register a message .
   - `$d2s/{{uuid}}/partner/feedback` // subscribe the feedback
 There are 2 event notifications
+  - `$drm/{{uuid}}/online` // notify a message after the device offline .
   - `$drm/{{uuid}}/offline` // notify a message after the device offline .
   - `$drm/{{uuid}}/timeout` // notify a message when the message timtout
 
@@ -40,6 +41,6 @@ There are 2 event notifications
 
 sudo apt-get install mosquitto-clients
 
-mosquitto_sub -h open.yunplus.io -t "^drm/offline/foo" -u "fpmuser" -P "123123123"
+mosquitto_sub -h open.yunplus.io -t "^drm/offline/foo" -u "fpmuser" -P
 
-mosquitto_pub -h open.yunplus.io -t "^drm/offline/foo" -m "2" -u "fpmuser" -P "123123123"
+mosquitto_pub -h open.yunplus.io -t '$drm/test/renew' -m '{"header":{"v":10,"ns":"FPM.Lamp.Light","name":"Renew","appId":"test","projId":2,"source":"MQTT"},"payload":{"sn":"ff0111","expire":100,"cgi":"ff0111","timestamp":1594829482984}}' -u "fpmuser" -P
