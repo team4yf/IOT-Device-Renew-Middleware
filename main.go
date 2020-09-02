@@ -37,22 +37,30 @@ func main() {
 	})
 	//catch the message
 	fpmApp.Subscribe("#redis/receive", func(_ string, data interface{}) {
-		//data 通常是 byte[] 类型，可以转成 string 或者 map
 		body := data.(map[string]interface{})
 		t := body["topic"].(string)
-		p := body["payload"].(string)
-		fpmApp.Logger.Debugf("redis topic: %s, payload: %+v", t, p)
-		//get the data
-		deviceKey := p
+		expiredData := body["payload"].(string)
+		fpmApp.Logger.Debugf("redis topic: %s, payload: %+v", t, expiredData)
 
 		// filter the other key event
-		if !strings.HasPrefix(deviceKey, redisBizPrefix+":"+redisPrefix) {
+		if !strings.HasPrefix(expiredData, redisBizPrefix+":"+redisPrefix) {
 			return
 		}
 
-		isOk, err := publishOfflineEvent(deviceKey)
-		if !isOk {
-			fpmApp.Logger.Infof("publishOfflineEvent failed, error: %v", err)
+		keyType, _, _, _ := splitKey(expiredData)
+		// the data includes device and msg, so we should add an other prefix
+		// TODO:
+		switch keyType {
+		case "device":
+			isOk, err := publishOfflineEvent(expiredData)
+			if !isOk {
+				fpmApp.Logger.Infof("publishOfflineEvent failed, error: %v", err)
+			}
+		case "msg":
+			isOk, err := publishMsgTimeoutEvent(expiredData)
+			if !isOk {
+				fpmApp.Logger.Infof("publishMsgTimeoutEvent failed, error: %v", err)
+			}
 		}
 
 	})
@@ -76,8 +84,27 @@ func main() {
 			}
 		// https://shimo.im/docs/bJaoNiMc4yEfkRSt#anchor-bXxn
 		case strings.HasSuffix(t, "message"):
+			msg := message.MsgMessage{}
+			if err := json.Unmarshal(p, &msg); err != nil {
+				fpmApp.Logger.Errorf("parse msg message error: %v", err)
+				return
+			}
+			if err := Renew(msg.Header.AppID, msg.Header.ProjID, msg.Payload.MsgID, msg.Payload.Expire, p); err != nil {
+				fpmApp.Logger.Errorf("do renew message error: %v", err)
+				return
+			}
 		// https://shimo.im/docs/bJaoNiMc4yEfkRSt#anchor-dIeX
 		case strings.HasSuffix(t, "feedback"):
+			msg := message.D2SFeedbackMessage{}
+			if err := json.Unmarshal(p, &msg); err != nil {
+				fpmApp.Logger.Errorf("parse feedback message error: %v", err)
+				return
+			}
+			key := fmt.Sprintf("%s:%s:%s:%d:%s", redisPrefix, "msg", msg.Header.AppID, msg.Header.ProjID, msg.Feedback.MsgID)
+			if _, err := remove(key); err != nil {
+				fpmApp.Logger.Errorf("do remove message error: %v", err)
+				return
+			}
 		}
 	})
 
@@ -85,9 +112,16 @@ func main() {
 
 }
 
+//Msg store a msg, notify a timeout event after timeout
+func Msg(appID string, projectID int64, msgID string, expired int64, origin []byte) (err error) {
+	key := fmt.Sprintf("%s:%s:%s:%d:%s", redisPrefix, "msg", appID, projectID, msgID)
+	_, err = renew(key, expired, origin)
+	return
+}
+
 //Renew update the device active time
 func Renew(appID string, projectID int64, deviceID string, expired int64, origin []byte) (err error) {
-	device := fmt.Sprintf("%s:%s:%d:%s", redisPrefix, appID, projectID, deviceID)
+	device := fmt.Sprintf("%s:%s:%s:%d:%s", redisPrefix, "device", appID, projectID, deviceID)
 
 	// if the device not exist, publish a online event
 	isOk, err := check(device)
@@ -104,7 +138,7 @@ func Renew(appID string, projectID int64, deviceID string, expired int64, origin
 }
 
 func publishOnlineEvent(deviceKey string) (bool, error) {
-	appID, projectID, deviceID := splitDeviceKey(deviceKey)
+	_, appID, projectID, deviceID := splitKey(deviceKey)
 	// publish the event
 	fpmApp := fpm.Default()
 	msg := message.RenewMessage{
@@ -134,7 +168,7 @@ func publishOnlineEvent(deviceKey string) (bool, error) {
 }
 
 func publishOfflineEvent(deviceKey string) (bool, error) {
-	appID, projectID, deviceID := splitDeviceKey(deviceKey)
+	_, appID, projectID, deviceID := splitKey(deviceKey)
 	// publish the event
 	fpmApp := fpm.Default()
 	msg := message.RenewMessage{
@@ -163,34 +197,72 @@ func publishOfflineEvent(deviceKey string) (bool, error) {
 	return true, nil
 }
 
-func genOnOfflineMessage() {
-
+func publishMsgTimeoutEvent(key string) (bool, error) {
+	_, appID, projectID, msgID := splitKey(key)
+	// publish the event
+	fpmApp := fpm.Default()
+	msg := message.MsgMessage{
+		Header: &message.Header{
+			Version:   10,
+			NameSpace: "FPM.Lamp.Light",
+			Name:      "Timeout",
+			AppID:     appID,
+			ProjID:    projectID,
+			Source:    "MQTT",
+		},
+		Payload: &message.MsgPayload{
+			MsgID:     msgID,
+			Timestamp: time.Now().Unix(),
+		},
+	}
+	data, err := json.Marshal(&msg)
+	if err != nil {
+		return false, err
+	}
+	fpmApp.Execute("mqttclient.publish", &fpm.BizParam{
+		"topic":   "$drm/" + appID + "/timeout",
+		"payload": data,
+	})
+	return true, nil
 }
 
 // split the redis key,
-// like: drm:foo:bar
-// it should return foo, bar
-func splitDeviceKey(deviceKey string) (string, int64, string) {
+// like: bizPrefix:DRM:device:test:1:ff001
+// it should return test, device, 1, ff001
+func splitKey(deviceKey string) (string, string, int64, string) {
 	subStrs := strings.Split(deviceKey, ":")
 	offset := 0
 	if !strings.HasPrefix(deviceKey, redisPrefix) {
 		offset = 1
 	}
-	appID, projectID, deviceID := subStrs[offset+1], subStrs[offset+2], subStrs[offset+3]
+	keyType, appID, projectID, deviceID := subStrs[offset+1], subStrs[offset+2], subStrs[offset+3], subStrs[offset+4]
 	id, _ := strconv.Atoi(projectID)
-	return appID, int64(id), deviceID
+	return keyType, appID, int64(id), deviceID
 
 }
 
-// renew the device
-func renew(device string, ex int64, origin []byte) (bool, error) {
+// renew the data
+func renew(key string, ex int64, origin []byte) (bool, error) {
 	c, _ := fpm.Default().GetCacher()
 
-	if err := c.SetString(device, string(origin), time.Duration(ex)*time.Second); err != nil {
+	if err := c.SetString(key, string(origin), time.Duration(ex)*time.Second); err != nil {
 		return false, err
 	}
 
 	return true, nil
+}
+
+//remove remove a key
+func remove(key string) (bool, error) {
+	c, _ := fpm.Default().GetCacher()
+	exists, err := c.IsSet(key)
+	if err != nil {
+		return false, err
+	}
+	if !exists {
+		return false, nil
+	}
+	return c.Remove(key)
 }
 
 // check the device
