@@ -19,7 +19,7 @@ WORKDIR /app
 
 # 复制项目中的 go.mod 和 go.sum文件并下载依赖信息
 COPY go.mod .
-COPY go.sum .
+# COPY go.sum .
 RUN go mod download
 
 # 将代码复制到容器中
@@ -39,7 +39,7 @@ WORKDIR /
 
 COPY --from=builder /app/main /
 # Copy the Pre-built binary file from the previous stage
-
+COPY ./conf/config.local.json /conf/config.local.json
 # Command to run the executable
 ENTRYPOINT ["/main"]
 CMD []

@@ -1,4 +1,4 @@
-all: build push clean
+all: build push
 
 PROJECTNAME=$(shell basename "$(PWD)")
 GOBASE=$(shell pwd)
@@ -25,9 +25,6 @@ build:
 
 push:
 	docker push yfsoftcom/fpm-iot-drm:${TAG}
-
-clean:
-	rm -rf main
 
 test-renew:
 	# 如果要复制到 shell 中运行，需要此处的 $$ 换成 $ ， makfile中自动转义了 $, 所以这里放了2个 $
