@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github/team4yf/IOT-Device-Renew-Middleware/message"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -97,8 +96,7 @@ func Renew(appID string, projectID int64, deviceID string, expired int64, origin
 	}
 	if !isOk {
 		go func() {
-			pushed, _ := publishOnlineEvent(device)
-			log.Println("pushed: ", pushed)
+			publishOnlineEvent(device)
 		}()
 	}
 	isOk, err = renew(device, expired, origin)
