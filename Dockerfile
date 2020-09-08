@@ -35,11 +35,9 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
   echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories && \
   apk --no-cache add ca-certificates
 
-WORKDIR /
+WORKDIR /app
 
-COPY --from=builder /app/main /
-# Copy the Pre-built binary file from the previous stage
-COPY ./conf/config.local.json /conf/config.local.json
+COPY --from=builder /app/main /app/
 # Command to run the executable
-ENTRYPOINT ["/main"]
+ENTRYPOINT ["/app/main"]
 CMD []
